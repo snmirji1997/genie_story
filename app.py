@@ -17,7 +17,7 @@ from config import (
     ALLOWED_IMAGE_TYPES,
 )
 from prompts import build_story_prompt
-from gemini_service import generate_story
+from gemini_service import generate_story, generate_caption
 
 
 # --- Page Configuration ---
@@ -28,11 +28,11 @@ st.set_page_config(
 )
 
 # --- Initialize Session State ---
-# session_state persists across Streamlit reruns.
-# Without this, the generated story would disappear
-# every time the user changes a sidebar setting.
+# Store both the story and caption so they persist across reruns.
 if "generated_story" not in st.session_state:
     st.session_state.generated_story = None
+if "generated_caption" not in st.session_state:
+    st.session_state.generated_caption = None
 
 
 def validate_image(uploaded_file):
@@ -73,14 +73,13 @@ def display_sidebar():
     Display sidebar with controls and return user selections.
 
     Returns:
-        tuple: (category: str, length: str, tone: str, instructions: str)
+        tuple: (category: str, length: str, tone: str, instructions: str, use_caption: bool)
     """
 
     with st.sidebar:
         st.header("⚙️ Story Settings")
 
         # --- Category Selection ---
-        # Add "Custom" as the last option so users can type their own genre.
         category_options = STORY_CATEGORIES + ["Custom"]
 
         selected_category = st.selectbox(
@@ -89,15 +88,11 @@ def display_sidebar():
             index=0,
         )
 
-        # If "Custom" is selected, show a text input for the custom genre.
-        # Otherwise, use the selected value from the dropdown.
         if selected_category == "Custom":
             category = st.text_input(
                 "Enter your custom genre:",
                 placeholder="e.g., Steampunk Western, Bollywood Thriller...",
             )
-            # If user selected Custom but hasn't typed anything yet,
-            # default to "Fantasy" to avoid sending an empty genre.
             if not category.strip():
                 category = "Fantasy"
         else:
@@ -117,6 +112,15 @@ def display_sidebar():
             index=1,
         )
 
+        # --- Image Captioning Toggle ---
+        # st.toggle creates an on/off switch.
+        # When enabled, the app generates a caption before the story.
+        use_caption = st.toggle(
+            "Generate image caption first",
+            value=True,
+            help="AI describes the image first, then uses that description to write a richer story.",
+        )
+
         # --- Extra Instructions ---
         instructions = st.text_area(
             "Additional instructions (optional):",
@@ -127,26 +131,39 @@ def display_sidebar():
         st.divider()
         st.markdown("Built with 🧞 Gemini + Streamlit")
 
-    return category, length, tone, instructions
+    return category, length, tone, instructions, use_caption
 
 
-def display_story(story):
+def display_story(story, caption=None):
     """
-    Display the generated story with formatting.
+    Display the generated caption and story with formatting.
 
     Args:
         story (str): The generated story text.
+        caption (str): The generated image caption (optional).
     """
 
     st.divider()
+
+    # Show the caption if it exists.
+    # An expander hides the caption by default to keep the UI clean,
+    # but the user can click to see what the AI "saw" in the image.
+    if caption:
+        with st.expander("🔍 AI Image Caption (click to view)", expanded=False):
+            st.markdown(f"*{caption}*")
+
     st.subheader("📖 Your Generated Story")
     st.markdown(story)
 
-    # Download button lets the user save the story as a text file.
-    # st.download_button handles file creation automatically.
+    # Download button — includes the caption at the top of the file if available.
+    download_text = ""
+    if caption:
+        download_text += f"[Image Caption]\n{caption}\n\n---\n\n"
+    download_text += story
+
     st.download_button(
         label="📥 Download Story",
-        data=story,
+        data=download_text,
         file_name="genie_story.txt",
         mime="text/plain",
     )
@@ -162,7 +179,7 @@ def main():
 
     # --- Display header and sidebar ---
     display_header()
-    category, length, tone, instructions = display_sidebar()
+    category, length, tone, instructions, use_caption = display_sidebar()
 
     # --- Image Upload ---
     uploaded_file = st.file_uploader(
@@ -189,14 +206,34 @@ def main():
         # --- Generate Story Button ---
         if st.button("🧞 Generate Story", type="primary", use_container_width=True):
 
-            # Build prompt with all settings including tone.
-            prompt = build_story_prompt(category, instructions, length, tone)
+            caption = ""
+
+            # --- Step 1: Caption (if enabled) ---
+            # This is the first call in our two-step AI pipeline.
+            if use_caption:
+                with st.spinner("🔍 Analyzing the image..."):
+                    cap_success, cap_result = generate_caption(image)
+
+                if cap_success:
+                    caption = cap_result
+                    st.session_state.generated_caption = caption
+                else:
+                    # Caption failed, but we can still try story generation
+                    # without the caption. Show a warning, not an error.
+                    st.warning(f"Caption generation failed: {cap_result}. Continuing without caption.")
+                    caption = ""
+                    st.session_state.generated_caption = None
+            else:
+                st.session_state.generated_caption = None
+
+            # --- Step 2: Story Generation ---
+            # The caption (if available) is injected into the prompt.
+            prompt = build_story_prompt(category, instructions, length, tone, caption)
 
             with st.spinner("🧞 The Genie is crafting your story..."):
                 success, result = generate_story(image, prompt)
 
             if success:
-                # Store in session_state so it survives reruns.
                 st.session_state.generated_story = result
                 st.success("Story generated successfully!")
             else:
@@ -204,13 +241,16 @@ def main():
                 st.error(result)
 
         # --- Display story from session state ---
-        # This shows the story even after sidebar changes trigger a rerun.
         if st.session_state.generated_story:
-            display_story(st.session_state.generated_story)
+            display_story(
+                st.session_state.generated_story,
+                st.session_state.generated_caption,
+            )
 
     else:
-        # Reset story when image is removed.
+        # Reset everything when image is removed.
         st.session_state.generated_story = None
+        st.session_state.generated_caption = None
         st.info("👆 Upload an image above to get started!")
 
 
