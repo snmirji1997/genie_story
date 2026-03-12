@@ -3,17 +3,19 @@
 # ============================================
 # This module handles all communication with
 # Google's Gemini API for story generation.
+# Uses the new google-genai SDK.
 # ============================================
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 from config import GEMINI_API_KEY
 
-# --- Configure the Gemini SDK with our API key ---
-# This must happen once before any API calls.
-genai.configure(api_key=GEMINI_API_KEY)
+# --- Create a Client ---
+# The new SDK uses a Client object instead of module-level configure().
+# All API calls go through this client instance.
+client = genai.Client(api_key=GEMINI_API_KEY)
 
 # --- Model Configuration ---
-# gemini-2.0-flash: Fast, capable, supports image + text input.
 MODEL_NAME = "gemini-2.5-flash"
 
 
@@ -32,29 +34,23 @@ def generate_story(image, prompt):
     """
 
     try:
-        # Create a model instance.
-        model = genai.GenerativeModel(MODEL_NAME)
+        # Generate content by passing the prompt and image together.
+        # The new SDK accepts them directly in a list.
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[prompt, image],
+            config=types.GenerateContentConfig(
+                temperature=0.8,        # Higher = more creative
+                max_output_tokens=8192, # Room for longer stories
+            ),
+        )
 
-        # Send both the prompt and image to Gemini.
-        # The model processes them together — it "sees" the image
-        # and "reads" the prompt to generate a response.
-        response = model.generate_content([prompt, image])
-
-        # Extract the text from the response.
-        # response.text is a shortcut that joins all text parts.
         return (True, response.text)
 
     except ValueError as e:
-        # Raised when the response is blocked by safety filters
-        # or the content is flagged as inappropriate.
         return (False, f"Content was blocked by safety filters: {e}")
 
     except Exception as e:
-        # Catch-all for any other errors:
-        # - Invalid API key
-        # - Network issues
-        # - Rate limiting
-        # - Unsupported image format
         return (False, f"Error generating story: {e}")
 
 
@@ -71,14 +67,20 @@ def generate_caption(image):
     """
 
     try:
-        model = genai.GenerativeModel(MODEL_NAME)
-
         caption_prompt = (
             "Describe this image in 2-3 detailed sentences. "
             "Focus on the key subjects, setting, mood, and any notable details."
         )
 
-        response = model.generate_content([caption_prompt, image])
+        response = client.models.generate_content(
+            model=MODEL_NAME,
+            contents=[caption_prompt, image],
+            config=types.GenerateContentConfig(
+                temperature=0.4,        # Lower = more factual for captions
+                max_output_tokens=256,  # Captions are short
+            ),
+        )
+
         return (True, response.text)
 
     except Exception as e:
