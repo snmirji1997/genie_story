@@ -6,9 +6,9 @@
 # Turns Python scripts into interactive web apps
 streamlit>=1.38.0
 
-# Google Generative AI: Official SDK for Gemini models
-# Provides access to Gemini Vision for image + text understanding
-google-generativeai>=0.8.0
+# Google GenAI: Official SDK for Gemini models (new package)
+# Replaces the deprecated google-generativeai package
+google-genai>=1.0.0
 
 # Pillow: Image processing library
 # Used to open, validate, and manipulate uploaded images

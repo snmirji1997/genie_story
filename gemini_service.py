@@ -14,7 +14,7 @@ genai.configure(api_key=GEMINI_API_KEY)
 
 # --- Model Configuration ---
 # gemini-2.0-flash: Fast, capable, supports image + text input.
-MODEL_NAME = "gemini-2.0-flash"
+MODEL_NAME = "gemini-2.5-flash"
 
 
 def generate_story(image, prompt):
