@@ -1,0 +1,19 @@
+# ============================================
+# Genie Image Story Generator - Dependencies
+# ============================================
+
+# Streamlit: Web UI framework for Python
+# Turns Python scripts into interactive web apps
+streamlit>=1.38.0
+
+# Google Generative AI: Official SDK for Gemini models
+# Provides access to Gemini Vision for image + text understanding
+google-generativeai>=0.8.0
+
+# Pillow: Image processing library
+# Used to open, validate, and manipulate uploaded images
+Pillow>=10.0.0
+
+# python-dotenv: Environment variable loader
+# Reads API keys from a .env file so secrets stay out of code
+python-dotenv>=1.0.0
