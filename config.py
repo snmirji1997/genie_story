@@ -3,21 +3,23 @@
 # ============================================
 # This module loads environment variables and
 # defines settings used across the project.
+# Supports both local (.env) and cloud (st.secrets) environments.
 # ============================================
 
 import os
+import streamlit as st
 from dotenv import load_dotenv
 
-# Load variables from .env file into the environment.
-# This must be called BEFORE os.getenv() so the values are available.
+# Load variables from .env file (used for local development).
 load_dotenv()
 
 # --- API Configuration ---
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# Try Streamlit Cloud secrets first, then fall back to .env file.
+# st.secrets is available when deployed on Streamlit Community Cloud.
+# os.getenv reads from the .env file for local development.
+GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
 
 # --- Story Categories ---
-# These are the default categories shown in the UI dropdown.
-# We define them here so they can be reused by any module.
 STORY_CATEGORIES = [
     "Fantasy",
     "Horror",
@@ -29,7 +31,6 @@ STORY_CATEGORIES = [
 ]
 
 # --- Tone Options ---
-# Controls the mood and writing style of the generated story.
 STORY_TONES = [
     "Dramatic",
     "Lighthearted",
@@ -40,8 +41,5 @@ STORY_TONES = [
 ]
 
 # --- Image Settings ---
-# Maximum file size in MB for uploaded images.
 MAX_IMAGE_SIZE_MB = 5
-
-# Supported image formats.
 ALLOWED_IMAGE_TYPES = ["jpg", "jpeg", "png", "webp"]
