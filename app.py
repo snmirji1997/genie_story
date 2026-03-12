@@ -9,28 +9,35 @@ import io
 import streamlit as st
 from PIL import Image
 
-from config import GEMINI_API_KEY, STORY_CATEGORIES, MAX_IMAGE_SIZE_MB, ALLOWED_IMAGE_TYPES
+from config import (
+    GEMINI_API_KEY,
+    STORY_CATEGORIES,
+    STORY_TONES,
+    MAX_IMAGE_SIZE_MB,
+    ALLOWED_IMAGE_TYPES,
+)
 from prompts import build_story_prompt
 from gemini_service import generate_story
 
 
 # --- Page Configuration ---
-# Must be the FIRST Streamlit command in the script.
-# Sets the browser tab title, icon, and page layout.
 st.set_page_config(
     page_title="Genie Image Story Generator",
     page_icon="🧞",
     layout="centered",
 )
 
+# --- Initialize Session State ---
+# session_state persists across Streamlit reruns.
+# Without this, the generated story would disappear
+# every time the user changes a sidebar setting.
+if "generated_story" not in st.session_state:
+    st.session_state.generated_story = None
+
 
 def validate_image(uploaded_file):
     """
     Validate the uploaded image file.
-
-    Checks:
-        1. File size is within the allowed limit.
-        2. File type is in the allowed formats.
 
     Args:
         uploaded_file: The file object from st.file_uploader.
@@ -39,15 +46,10 @@ def validate_image(uploaded_file):
         tuple: (is_valid: bool, message: str)
     """
 
-    # Check file size.
-    # uploaded_file.size gives bytes, so we convert MB to bytes.
     max_bytes = MAX_IMAGE_SIZE_MB * 1024 * 1024
     if uploaded_file.size > max_bytes:
         return (False, f"Image too large. Maximum size is {MAX_IMAGE_SIZE_MB}MB.")
 
-    # Check file type.
-    # uploaded_file.type gives something like "image/jpeg".
-    # We extract the part after "/" and compare with our allowed list.
     file_extension = uploaded_file.type.split("/")[-1].lower()
     if file_extension not in ALLOWED_IMAGE_TYPES:
         allowed = ", ".join(ALLOWED_IMAGE_TYPES)
@@ -71,24 +73,48 @@ def display_sidebar():
     Display sidebar with controls and return user selections.
 
     Returns:
-        tuple: (category: str, length: str, instructions: str)
+        tuple: (category: str, length: str, tone: str, instructions: str)
     """
 
     with st.sidebar:
         st.header("⚙️ Story Settings")
 
         # --- Category Selection ---
-        category = st.selectbox(
+        # Add "Custom" as the last option so users can type their own genre.
+        category_options = STORY_CATEGORIES + ["Custom"]
+
+        selected_category = st.selectbox(
             "Choose a genre:",
-            options=STORY_CATEGORIES,
-            index=0,  # Default to first item ("Fantasy")
+            options=category_options,
+            index=0,
+        )
+
+        # If "Custom" is selected, show a text input for the custom genre.
+        # Otherwise, use the selected value from the dropdown.
+        if selected_category == "Custom":
+            category = st.text_input(
+                "Enter your custom genre:",
+                placeholder="e.g., Steampunk Western, Bollywood Thriller...",
+            )
+            # If user selected Custom but hasn't typed anything yet,
+            # default to "Fantasy" to avoid sending an empty genre.
+            if not category.strip():
+                category = "Fantasy"
+        else:
+            category = selected_category
+
+        # --- Tone Selection ---
+        tone = st.selectbox(
+            "Story tone:",
+            options=STORY_TONES,
+            index=0,
         )
 
         # --- Story Length ---
         length = st.selectbox(
             "Story length:",
             options=["Short", "Medium", "Long"],
-            index=1,  # Default to "Medium"
+            index=1,
         )
 
         # --- Extra Instructions ---
@@ -101,30 +127,51 @@ def display_sidebar():
         st.divider()
         st.markdown("Built with 🧞 Gemini + Streamlit")
 
-    return category, length, instructions
+    return category, length, tone, instructions
+
+
+def display_story(story):
+    """
+    Display the generated story with formatting.
+
+    Args:
+        story (str): The generated story text.
+    """
+
+    st.divider()
+    st.subheader("📖 Your Generated Story")
+    st.markdown(story)
+
+    # Download button lets the user save the story as a text file.
+    # st.download_button handles file creation automatically.
+    st.download_button(
+        label="📥 Download Story",
+        data=story,
+        file_name="genie_story.txt",
+        mime="text/plain",
+    )
 
 
 def main():
     """Main application flow."""
 
-    # --- Step 1: Check API Key ---
-    # If the key is missing, show a warning and stop.
+    # --- Check API Key ---
     if not GEMINI_API_KEY:
         st.error("⚠️ Gemini API key not found. Please set GEMINI_API_KEY in your .env file.")
         st.stop()
 
-    # --- Step 2: Display header and sidebar ---
+    # --- Display header and sidebar ---
     display_header()
-    category, length, instructions = display_sidebar()
+    category, length, tone, instructions = display_sidebar()
 
-    # --- Step 3: Image Upload ---
+    # --- Image Upload ---
     uploaded_file = st.file_uploader(
         "Upload an image to inspire your story:",
         type=ALLOWED_IMAGE_TYPES,
         help=f"Max size: {MAX_IMAGE_SIZE_MB}MB. Formats: {', '.join(ALLOWED_IMAGE_TYPES)}",
     )
 
-    # --- Step 4: Process the uploaded image ---
+    # --- Process uploaded image ---
     if uploaded_file is not None:
 
         # Validate the image.
@@ -133,38 +180,39 @@ def main():
             st.error(message)
             st.stop()
 
-        # Open the image using Pillow.
-        # BytesIO wraps the raw bytes so Pillow can read them like a file.
+        # Open the image with Pillow.
         image = Image.open(io.BytesIO(uploaded_file.read()))
 
-        # Display the uploaded image in the UI.
+        # Display the uploaded image.
         st.image(image, caption="Your uploaded image", use_container_width=True)
 
-        # --- Step 5: Generate Story Button ---
+        # --- Generate Story Button ---
         if st.button("🧞 Generate Story", type="primary", use_container_width=True):
 
-            # Build the prompt using our prompts module.
-            prompt = build_story_prompt(category, instructions, length)
+            # Build prompt with all settings including tone.
+            prompt = build_story_prompt(category, instructions, length, tone)
 
-            # Call Gemini with a loading spinner.
             with st.spinner("🧞 The Genie is crafting your story..."):
                 success, result = generate_story(image, prompt)
 
-            # --- Step 6: Display Results ---
             if success:
+                # Store in session_state so it survives reruns.
+                st.session_state.generated_story = result
                 st.success("Story generated successfully!")
-                st.divider()
-                st.markdown(result)
             else:
+                st.session_state.generated_story = None
                 st.error(result)
 
+        # --- Display story from session state ---
+        # This shows the story even after sidebar changes trigger a rerun.
+        if st.session_state.generated_story:
+            display_story(st.session_state.generated_story)
+
     else:
-        # Show a helpful message when no image is uploaded yet.
+        # Reset story when image is removed.
+        st.session_state.generated_story = None
         st.info("👆 Upload an image above to get started!")
 
 
-# --- Entry Point ---
-# Streamlit runs the script top-to-bottom, but wrapping logic
-# in main() keeps the code organized and testable.
 if __name__ == "__main__":
     main()
