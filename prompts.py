@@ -5,7 +5,7 @@
 # Gemini alongside the uploaded image.
 # ============================================
 
-def build_story_promt(category, instructions="",length="medium"):
+def build_story_prompt(category, instructions="",length="medium"):
     """
     Build a structured promt for story generation
 
