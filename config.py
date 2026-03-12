@@ -1,20 +1,19 @@
-
 # ============================================
 # config.py — Application Configuration
 # ============================================
 # This module loads environment variables and
 # defines settings used across the project.
 # ============================================
+
 import os
 from dotenv import load_dotenv
+
 # Load variables from .env file into the environment.
 # This must be called BEFORE os.getenv() so the values are available.
 load_dotenv()
 
-
 # --- API Configuration ---
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
-
 
 # --- Story Categories ---
 # These are the default categories shown in the UI dropdown.
@@ -27,6 +26,17 @@ STORY_CATEGORIES = [
     "Sci-Fi",
     "Romance",
     "Mystery",
+]
+
+# --- Tone Options ---
+# Controls the mood and writing style of the generated story.
+STORY_TONES = [
+    "Dramatic",
+    "Lighthearted",
+    "Dark",
+    "Humorous",
+    "Suspenseful",
+    "Whimsical",
 ]
 
 # --- Image Settings ---

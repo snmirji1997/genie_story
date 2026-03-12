@@ -6,7 +6,7 @@
 # ============================================
 
 
-def build_story_prompt(category, instructions="", length="Medium", tone="Dramatic"):
+def build_story_prompt(category, instructions="", length="Medium", tone="Dramatic", caption=""):
     """
     Build a structured prompt for story generation.
 
@@ -15,6 +15,7 @@ def build_story_prompt(category, instructions="", length="Medium", tone="Dramati
         instructions (str): Optional extra instructions from the user.
         length (str): Story length — "Short", "Medium", or "Long".
         tone (str): Writing tone — "Dark", "Lighthearted", etc.
+        caption (str): AI-generated image description from the captioning step.
 
     Returns:
         str: The complete prompt to send to Gemini.
@@ -29,8 +30,6 @@ def build_story_prompt(category, instructions="", length="Medium", tone="Dramati
     word_count = length_map.get(length, "400-600 words")
 
     # Map tones to descriptive writing guidance.
-    # This gives the model a richer understanding of what we want
-    # instead of just a single adjective.
     tone_map = {
         "Dramatic": "emotionally intense with high stakes and powerful moments",
         "Lighthearted": "fun, warm, and optimistic with a feel-good ending",
@@ -47,7 +46,18 @@ def build_story_prompt(category, instructions="", length="Medium", tone="Dramati
 TASK:
 Look at the provided image carefully. Write an original {category} story 
 inspired by what you see in the image.
+"""
 
+    # --- Inject the caption if available ---
+    # This gives the model a pre-analyzed understanding of the image,
+    # resulting in richer, more detailed stories.
+    if caption.strip():
+        prompt += f"""
+IMAGE DESCRIPTION (use this as context for your story):
+{caption.strip()}
+"""
+
+    prompt += f"""
 GENRE: {category}
 TONE: The writing style should be {tone_description}.
 LENGTH: Approximately {word_count}.
@@ -55,6 +65,7 @@ LENGTH: Approximately {word_count}.
 RULES:
 - The story MUST be in the {category} genre.
 - Maintain the {tone} tone consistently throughout.
+- Use details from the image description to enrich the story.
 - Include vivid descriptions and engaging dialogue where appropriate.
 - The story must have a clear beginning, middle, and ending.
 - Start with a creative title on its own line, prefixed with "Title: ".
@@ -74,7 +85,7 @@ ADDITIONAL INSTRUCTIONS FROM THE USER:
 def build_caption_prompt():
     """
     Build a prompt that asks Gemini to describe the image.
-    Used in Phase 4 to generate a caption before the story.
+    This caption is used to enrich the story generation prompt.
 
     Returns:
         str: The caption prompt.
