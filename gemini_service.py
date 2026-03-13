@@ -10,13 +10,30 @@ from google import genai
 from google.genai import types
 from config import GEMINI_API_KEY
 
-# --- Create a Client ---
-# The new SDK uses a Client object instead of module-level configure().
-# All API calls go through this client instance.
-client = genai.Client(api_key=GEMINI_API_KEY)
-
 # --- Model Configuration ---
 MODEL_NAME = "gemini-2.5-flash"
+
+# --- Lazy Client ---
+# We don't create the client at import time because on Streamlit Cloud,
+# st.secrets may not be ready yet when the module first loads.
+# Instead, we create it on the first API call and reuse it after that.
+_client = None
+
+
+def _get_client():
+    """
+    Get or create the Gemini client.
+    This pattern is called 'lazy initialization' — the client is
+    only created when it's first needed, not at import time.
+
+    Returns:
+        genai.Client: The configured Gemini client.
+    """
+
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=GEMINI_API_KEY)
+    return _client
 
 
 def generate_story(image, prompt):
@@ -34,14 +51,14 @@ def generate_story(image, prompt):
     """
 
     try:
-        # Generate content by passing the prompt and image together.
-        # The new SDK accepts them directly in a list.
+        client = _get_client()
+
         response = client.models.generate_content(
             model=MODEL_NAME,
             contents=[prompt, image],
             config=types.GenerateContentConfig(
-                temperature=0.8,        # Higher = more creative
-                max_output_tokens=8192, # Room for longer stories
+                temperature=0.8,
+                max_output_tokens=8192,
             ),
         )
 
@@ -57,7 +74,6 @@ def generate_story(image, prompt):
 def generate_caption(image):
     """
     Generate a short description of the image.
-    Used in Phase 4 to caption the image before story generation.
 
     Args:
         image (PIL.Image): The uploaded image.
@@ -67,6 +83,8 @@ def generate_caption(image):
     """
 
     try:
+        client = _get_client()
+
         caption_prompt = (
             "Describe this image in 2-3 detailed sentences. "
             "Focus on the key subjects, setting, mood, and any notable details."
@@ -76,8 +94,8 @@ def generate_caption(image):
             model=MODEL_NAME,
             contents=[caption_prompt, image],
             config=types.GenerateContentConfig(
-                temperature=0.4,        # Lower = more factual for captions
-                max_output_tokens=256,  # Captions are short
+                temperature=0.4,
+                max_output_tokens=256,
             ),
         )
 
