@@ -8,15 +8,18 @@
 
 import os
 import streamlit as st
-from dotenv import load_dotenv
 
-# Load variables from .env file (used for local development).
-load_dotenv()
+# Try to load .env file for local development.
+# If python-dotenv is not installed (e.g., on Streamlit Cloud),
+# we skip it silently — the app will use st.secrets instead.
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except ImportError:
+    pass
 
 # --- API Configuration ---
 # Try Streamlit Cloud secrets first, then fall back to .env file.
-# st.secrets is available when deployed on Streamlit Community Cloud.
-# os.getenv reads from the .env file for local development.
 GEMINI_API_KEY = st.secrets.get("GEMINI_API_KEY", None) or os.getenv("GEMINI_API_KEY")
 
 # --- Story Categories ---
